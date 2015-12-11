@@ -461,6 +461,16 @@ class TemplateGenerator[T](val encoder: TemplateEncoder[T],
 
           andJoin(conjunctQs)
 
+        case IsTyped(CaseClassSelector(cct, caseClass, sel), ct: ClassType) if ct.root != ct =>
+          val newExpr : Identifier = FreshIdentifier("e", ct, true)
+          storeExpr(newExpr)
+
+          val crec = rec(pathVar, caseClass)
+          storeGuarded(pathVar, Equals(Variable(newExpr), CaseClassSelector(cct, crec, sel)))
+          storeGuarded(pathVar, IsInstanceOf(Variable(newExpr), ct))
+
+          Variable(newExpr)
+
         case Operator(as, r) => r(as.map(a => rec(pathVar, a)))
       }
     }
