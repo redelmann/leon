@@ -6,7 +6,13 @@
 */
 import leon.lang._
 import leon.collection._
-import leon.par._
+import leon.parallel._
+
+
+/**
+ * The following code will not verify with the new parallel library
+ * as parallel is now has a real, extern  implementation. 
+ */
 object MergeSortPar {
 
   def merge[T](less: (T, T) => Boolean)(xs: List[T], ys: List[T]): List[T] = {

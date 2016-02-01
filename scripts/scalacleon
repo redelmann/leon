@@ -6,7 +6,7 @@
 PATH_TO_LEON=".."  # assume we run from Leon script directory
 PATH_TO_LEON_LIB="${PATH_TO_LEON}/library/"
 OUT_CLASSES_DIR="${PATH_TO_LEON}/out-classes"
-SCALA_COMPILER="fsc"
+SCALA_COMPILER="scalac"
 mkdir -p ${OUT_CLASSES_DIR}
 echo ========= Now invoking: ====================================
 echo ${SCALA_COMPILER} $(find ${PATH_TO_LEON_LIB} -name "*.scala" | xargs) $* -d ${OUT_CLASSES_DIR}
