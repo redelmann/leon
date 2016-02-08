@@ -251,7 +251,44 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
           SeqUtils.cartesianProduct(seqs).map(_.flatten.toSet)
         }
 
-        allProgramsFor(Seq(rootC))
+        def redundant(e: Expr): Boolean = {
+          val (op1, op2) = e match {
+            case Minus(o1, o2) => (o1, o2)
+            case Modulo(o1, o2) => (o1, o2)
+            case Division(o1, o2) => (o1, o2)
+            case BVMinus(o1, o2) => (o1, o2)
+            case BVRemainder(o1, o2) => (o1, o2)
+            case BVDivision(o1, o2) => (o1, o2)
+
+            case And(Seq(Not(o1), Not(o2))) => (o1, o2)
+            case And(Seq(Not(o1), o2)) => (o1, o2)
+            case And(Seq(o1, Not(o2))) => (o1, o2)
+            case And(Seq(o1, o2)) => (o1, o2)
+
+            case Or(Seq(Not(o1), Not(o2))) => (o1, o2)
+            case Or(Seq(Not(o1), o2)) => (o1, o2)
+            case Or(Seq(o1, Not(o2))) => (o1, o2)
+            case Or(Seq(o1, o2)) => (o1, o2)
+
+            case SetUnion(o1, o2) => (o1, o2)
+            case SetIntersection(o1, o2) => (o1, o2)
+            case SetDifference(o1, o2) => (o1, o2)
+
+            case Equals(Not(o1), Not(o2)) => (o1, o2)
+            case Equals(Not(o1), o2) => (o1, o2)
+            case Equals(o1, Not(o2)) => (o1, o2)
+            case Equals(o1, o2) => (o1, o2)
+            case _ => return false
+          }
+
+          op1 == op2
+        }
+
+        allProgramsFor(Seq(rootC))/* filterNot { bs =>
+          val res = params.optimizations && exists(redundant)(getExpr(bs))
+          if (!res) excludeProgram(bs, false)
+          res
+        }*/
       }
 
       private def debugCTree(cTree: Map[Identifier, Seq[(Identifier, Seq[Expr] => Expr, Seq[Identifier])]],
@@ -403,18 +440,8 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
       def testForProgram(bValues: Set[Identifier])(ex: Example): Boolean = {
 
         val origImpl = cTreeFd.fullBody
-        val outerSol = try {
-          getExpr(bValues, excludeRedundant = true)
-        } catch {
-          case i: IllegalArgumentException =>
-            // If we see a redundant expression in this program, we assume that an equivalent program
-            // will have appeared alread in a simpler form. So exclude this program and fail immediately.
-            excludeProgram(bValues, isMinimal = true)
-            return false
-        }
-
+        val outerSol = getExpr(bValues)
         val innerSol = outerExprToInnerExpr(outerSol)
-
         val cnstr = letTuple(p.xs, innerSol, innerPhi)
         cTreeFd.fullBody = innerSol
 
@@ -456,51 +483,12 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
       }
 
       // Returns the outer expression corresponding to a B-valuation
-      def getExpr(bValues: Set[Identifier], excludeRedundant: Boolean = false): Expr = {
-
-        // Detects redundant expressions like a == a, x - x, ...
-        def redundant(e: Expr): Boolean = {
-          val (op1, op2) = e match {
-            case Minus(o1, o2) => (o1, o2)
-            case Modulo(o1, o2) => (o1, o2)
-            case Division(o1, o2) => (o1, o2)
-            case BVMinus(o1, o2) => (o1, o2)
-            case BVRemainder(o1, o2) => (o1, o2)
-            case BVDivision(o1, o2) => (o1, o2)
-
-            case And(Seq(Not(o1), Not(o2))) => (o1, o2)
-            case And(Seq(Not(o1), o2)) => (o1, o2)
-            case And(Seq(o1, Not(o2))) => (o1, o2)
-            case And(Seq(o1, o2)) => (o1, o2)
-
-            case Or(Seq(Not(o1), Not(o2))) => (o1, o2)
-            case Or(Seq(Not(o1), o2)) => (o1, o2)
-            case Or(Seq(o1, Not(o2))) => (o1, o2)
-            case Or(Seq(o1, o2)) => (o1, o2)
-
-            case SetUnion(o1, o2) => (o1, o2)
-            case SetIntersection(o1, o2) => (o1, o2)
-            case SetDifference(o1, o2) => (o1, o2)
-
-            case Equals(Not(o1), Not(o2)) => (o1, o2)
-            case Equals(Not(o1), o2) => (o1, o2)
-            case Equals(o1, Not(o2)) => (o1, o2)
-            case Equals(o1, o2) => (o1, o2)
-            case _ => return false
-          }
-
-          op1 == op2
-        }
+      def getExpr(bValues: Set[Identifier]): Expr = {
 
         def getCValue(c: Identifier): Expr = {
           cTree(c).find(i => bValues(i._1)).map {
             case (b, builder, cs) =>
-              val e = builder(cs.map(getCValue))
-              if (excludeRedundant && redundant(e)) {
-                throw new IllegalArgumentException
-              } else {
-                e
-              }
+              builder(cs.map(getCValue))
           }.getOrElse {
             Error(c.getType, "Impossible assignment of bs")
           }
