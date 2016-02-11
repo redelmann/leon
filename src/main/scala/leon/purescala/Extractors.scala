@@ -8,7 +8,6 @@ import Common._
 import Types._
 import Constructors._
 import ExprOps._
-import Definitions.Program
 
 object Extractors {
 

@@ -725,8 +725,6 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
         val ndProgram = new NonDeterministicProgram(p)
         ndProgram.init()
 
-        var unfolding = 1
-
         var baseExampleInputs: ArrayBuffer[Example] = new ArrayBuffer[Example]()
 
         sctx.reporter.ifDebug { printer =>
@@ -797,6 +795,8 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
           n += 1
           gi.iterator
         }
+
+        var unfolding = 1
 
         try {
           do {
