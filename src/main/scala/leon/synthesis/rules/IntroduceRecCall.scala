@@ -13,7 +13,7 @@ import purescala.Common._
 import Witnesses.Terminating
 import utils.Helpers.terminatingCalls
 
-case object IntroduceRecCall extends Rule("Introduce rec. calls") {
+case object IntroduceRecCall extends NormalizingRule("Introduce rec. calls") {
 
   private class NoChooseEvaluator(ctx: LeonContext, prog: Program) extends DefaultEvaluator(ctx, prog) {
     override def e(expr: Expr)(implicit rctx: RC, gctx: GC): Expr = expr match {
