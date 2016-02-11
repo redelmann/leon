@@ -18,7 +18,8 @@ object Grammars {
     EqualityGrammar(Set(IntegerType, Int32Type, BooleanType) ++ inputs.map { _.getType }) ||
     OneOf(inputs) ||
     Constants(currentFunction.fullBody) ||
-    FunctionCalls(prog, currentFunction, inputs.map(_.getType), exclude)
+    FunctionCalls(prog, currentFunction, inputs.map(_.getType), exclude) ||
+    SafeRecursiveCalls(prog, ws, pc)
   }
 
   def default(sctx: SynthesisContext, p: Problem): ExpressionGrammar[TypeTree] = {

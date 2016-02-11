@@ -3,7 +3,7 @@
 package leon
 package evaluators
 
-import leon.purescala.Quantification._
+import purescala.Quantification._
 import purescala.Constructors._
 import purescala.ExprOps._
 import purescala.Expressions.Pattern
@@ -13,9 +13,8 @@ import purescala.Types._
 import purescala.Common._
 import purescala.Expressions._
 import purescala.Definitions._
-import leon.solvers.{HenkinModel, Model, SolverFactory}
+import leon.solvers.{HenkinModel, SolverFactory}
 import scala.collection.mutable.{Map => MutableMap}
-import leon.purescala.DefOps
 import org.apache.commons.lang3.StringEscapeUtils
 
 abstract class RecursiveEvaluator(ctx: LeonContext, prog: Program, maxSteps: Int)
@@ -27,7 +26,7 @@ abstract class RecursiveEvaluator(ctx: LeonContext, prog: Program, maxSteps: Int
 
   lazy val scalaEv = new ScalacEvaluator(this, ctx, prog)
 
-  protected var clpCache = Map[(Choose, Seq[Expr]), Expr]()
+  protected val clpCache = MutableMap[(Choose, Seq[Expr]), Expr]()
 
   protected[evaluators] def e(expr: Expr)(implicit rctx: RC, gctx: GC): Expr = expr match {
     case Variable(id) =>
