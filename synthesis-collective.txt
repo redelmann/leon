@@ -1,0 +1,31 @@
+Versions: X-X-N for CEGIS(o/n), grammar(o/n), max. size
+Y = Proof
+(blank) = no proof
+X = Timeout
+
+========================================================================================================
+Name                          | FDefs| Size |   O-O-5    |   O-O-7   | e710631 |  
+=========================================================================================================
+List.insert                   |   59 |    3 |  ✓ | 0.8   |  ✓ | 1.0  | ✓ | 0.8 |
+List.delete                   |   61 |    0 |  ✓ | 4.5   |  F | 30.1 | ✓ | 4.3 |
+List.union                    |   75 |   11 |  ✓ | 7.1   |  ✓ | 12.5 | ✓ | 4.2 |
+List.diff                     |  106 |    0 |  ✓ | 6.1   |  F | 31.8 | ✓ | 12.6|
+List.split*(easier for O-O)   |   96 |   24 |  ✓ | 3.6   |  ✓ | 5.3  | ✓ | 17.5|
+SortedList.insert             |   91 |    0 |  ? | 16.5  |  F | 30.0 | ? | 23.3|
+SortedList.insertAlways       |  105 |    0 |  ✓ | 20.5  |  F | 30.0 | ✓ | 37.4|
+SortedList.delete             |   91 |    0 |  ? | 7.9   |  F | 30.0 | ? | 6.8 |
+SortedList.union              |  138 |   11 |  ✓ | 6.9   |  ✓ | 15.1 | ✓ | 4.4 |
+SortedList.diff               |  136 |    0 |  ✓ | 5.9   |  F | 51.7 | ✓ | 8.4 |
+SortedList.insertionSort      |  125 |   10 |  ✓ | 1.9   |  ✓ | 3.5  | ✓ | 2.2 |
+StrictSortedList.insert       |   91 |    0 |  ✓ | 13.1  |  F | 30.0 | ✓ | 25.9|
+StrictSortedList.delete       |   91 |    0 |  ? | 10.2  |  F | 30.0 | ? | 8.9 |
+StrictSortedList.union        |  138 |   11 |  ✓ | 7.6   |  ✓ | 13.6 | ✓ | 4.8 |
+UnaryNumerals.add             |   42 |    9 |  ✓ | 4.3   |  ✓ | 4.1  | ✓ | 2.7 |
+UnaryNumerals.distinct        |   66 |    4 |  ✓ | 2.4   |  ✓ | 2.3  | ✓ | 2.2 |
+UnaryNumerals.mult            |   64 |   10 |  ✓ | 4.5   |  ✓ | 10.5 | ✓ | 5.0 |
+BatchedQueue.enqueue          |   89 |   20 |  F | 30.0  |  ? | 19.7 | ? | 14.2|
+BatchedQueue.dequeue          |   65 |    9 |  ? | 14.3  |  ? | 11.4 | ? | 7.6 |
+AddressBook.makeAddressBook   |   42 |    0 |  F | 14.3  |  F | 30.0 | ✓ | 25.2|
+AddressBook.merge             |   99 |   11 |  ? | 6.9   |  ? | 9.5  | ? | 8.1 |
+========================================================================================================
+
