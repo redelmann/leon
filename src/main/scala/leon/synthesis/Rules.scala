@@ -65,6 +65,7 @@ object Rules {
     //IntegerEquation,
     //IntegerInequalities,
     IntInduction,
+    IntegerSplit,
     InnerCaseSplit
     //new OptimisticInjection(_),
     //new SelectiveInlining(_),
