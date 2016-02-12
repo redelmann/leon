@@ -52,6 +52,5 @@ case object DetupleOutput extends Rule("Detuple Out") {
       None
     }
 
-    Nil
   }
 }
