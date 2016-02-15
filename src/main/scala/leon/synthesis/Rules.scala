@@ -213,20 +213,4 @@ trait RuleDSL {
     case _ => None
 
   }
-
-  /** Straightforward combination of solutions, where expression is reconstructed according to a combiner.
-    * If combiner fails, no solution will be returned.
-    *
-    * @param combiner The combiner of synthesized subterms which reconstructs the term of the solution from the subterms.
-    */
-  def simpleCombine(combiner: PartialFunction[List[Expr], Expr]): List[Solution] => Option[Solution] = { ls =>
-    combiner.lift(ls map (_.term)).map{ combined =>
-      Solution(
-        orJoin(ls map (_.pre)),
-        ls.flatMap (_.defs).toSet,
-        combined,
-        ls.forall(_.isTrusted)
-      )
-    }
-  }
 }

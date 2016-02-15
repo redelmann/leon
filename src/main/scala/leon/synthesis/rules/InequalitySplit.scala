@@ -10,64 +10,68 @@ import purescala.Constructors._
 import purescala.Extractors._
 import purescala.Common._
 
+/**
+ * Inequality Split should only be invoked on 'a' and 'b' if all we know is
+ * that 'a' != 'b' in the PC, and that we don't already find witnesses of 'a' <
+ * 'b' etc.. (so that the rule doesn't indefinitely apply)
+ */
 case object InequalitySplit extends Rule("Ineq. Split.") {
   def instantiateOn(implicit hctx: SearchContext, p: Problem): Traversable[RuleInstantiation] = {
-    // We approximate knowledge of equality based on facts found at the top-level
-    // we don't care if the variables are known to be equal or not, we just
-    // don't want to split on two variables for which only one split
-    // alternative is viable. This should be much less expensive than making
-    //  calls to a solver for each pair.
 
     val TopLevelAnds(as) = and(p.pc, p.phi)
-    def addFacts(e: Expr): Set[Identifier] = e match {
-      case Not(e) => addFacts(e)
-      case LessThan(Variable(a), Variable(b))      => Set(a,b)
-      case LessEquals(Variable(a), Variable(b))    => Set(a,b)
-      case GreaterThan(Variable(a), Variable(b))   => Set(a,b)
-      case GreaterEquals(Variable(a), Variable(b)) => Set(a,b)
-      case Equals(Variable(a), Variable(b))        => Set(a,b)
+
+    def getNEFacts(e: Expr): Set[Set[Expr]] = e match {
+      case Not(Equals(a, b)) => Set(Set(a,b))
       case _ => Set()
     }
-    val facts = as map addFacts
 
-    val argsPairs = p.as.filter(_.getType == IntegerType).combinations(2) ++
-                    p.as.filter(_.getType == Int32Type).combinations(2)
+    val neFacts = as flatMap getNEFacts
 
-    val candidates = argsPairs.toList.filter { case List(a1, a2) => !(facts contains Set(a1, a2)) }
+    def getFacts(e: Expr): Set[Set[Expr]] = e match {
+      case GreaterEquals(a, b) => Set(Set(a,b))
+      case LessEquals(a, b)    => Set(Set(a,b))
+      case GreaterThan(a, b)   => Set(Set(a,b))
+      case LessThan(a, b)      => Set(Set(a,b))
+      case Equals(a, b)        => Set(Set(a,b))
+      case _ => Set()
+    }
+
+    val facts = as flatMap getFacts
+
+
+    var candidates0 = 
+      (p.as.map(_.toVariable).filter(_.getType == Int32Type) :+ IntLiteral(0)).combinations(2).toList ++
+      (p.as.map(_.toVariable).filter(_.getType == IntegerType) :+ InfiniteIntegerLiteral(0)).combinations(2).toList
+
+    val candidates = candidates0.filter(neFacts contains _.toSet).filterNot(facts contains _.toSet)
 
     candidates.collect {
-      case List(a1, a2) =>
-        val onSuccess = simpleCombine {
-          case sols@List(sLT, sEQ, sGT) =>
-            IfExpr(
-              LessThan(Variable(a1), Variable(a2)),
-              sLT,
-              IfExpr(
-                Equals(Variable(a1), Variable(a2)),
-                sEQ,
-                sGT
-              )
-            )
+      case List(v1, v2) =>
+        // v1 is always a variable, v2 may be a value
+        val Variable(a1) = v1
+
+        val pcs = List(
+          GreaterThan(v1, v2),
+          LessThan(v1, v2)
+        )
+
+        val subProblems = pcs.map { pc =>
+          p.copy(pc = and(p.pc, pc),
+                 eb = p.qeb.filterIns(pc))
         }
 
-        val subTypes = List(p.outType, p.outType, p.outType)
+        val onSuccess: List[Solution] => Option[Solution] = {
+          case sols @ List(sEQ, sNE) =>
+          val pre = orJoin(pcs.zip(sols).map{ case (pc, sol) =>
+            and(pc, sol.pre)
+          })
 
-        new RuleInstantiation(s"Ineq. Split on '$a1' and '$a2'",
-                              SolutionBuilderDecomp(subTypes, onSuccess)) {
+          val term = IfExpr(pcs.head, sEQ.term, sNE.term)
 
-          def apply(hctx: SearchContext) = {
-            implicit val _ = hctx
-
-            val subLT = p.copy(pc = and(LessThan(Variable(a1), Variable(a2)), p.pc),
-                               eb = p.qeb.filterIns(LessThan(Variable(a1), Variable(a2))))
-            val subEQ = p.copy(pc = and(Equals(Variable(a1), Variable(a2)), p.pc),
-                               eb = p.qeb.filterIns(Equals(Variable(a1), Variable(a2))))
-            val subGT = p.copy(pc = and(GreaterThan(Variable(a1), Variable(a2)), p.pc),
-                               eb = p.qeb.filterIns(GreaterThan(Variable(a1), Variable(a2))))
-
-            RuleExpanded(List(subLT, subEQ, subGT))
-          }
+          Some(Solution(pre, sols.flatMap(_.defs).toSet, term, sols.forall(_.isTrusted)))
         }
+
+        decomp(subProblems, onSuccess, s"Ineq. Split on '$v1' and '$v2'")
     }
   }
 }

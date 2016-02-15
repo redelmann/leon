@@ -7,6 +7,7 @@ package rules
 import leon.purescala.Common.Identifier
 import purescala.Expressions._
 import purescala.Extractors._
+import purescala.Types._
 import purescala.Constructors._
 
 import solvers._
@@ -21,43 +22,60 @@ case object EqualitySplit extends Rule("Eq. Split") {
     // we don't care if the variables are known to be equal or not, we just
     // don't want to split on two variables for which only one split
     // alternative is viable. This should be much less expensive than making
-    //  calls to a solver for each pair.
-    var facts = Set[Set[Identifier]]()
-
-    def addFacts(e: Expr): Unit = e match {
-      case Not(e) => addFacts(e)
-      case LessThan(Variable(a), Variable(b))      => facts += Set(a,b)
-      case LessEquals(Variable(a), Variable(b))    => facts += Set(a,b)
-      case GreaterThan(Variable(a), Variable(b))   => facts += Set(a,b)
-      case GreaterEquals(Variable(a), Variable(b)) => facts += Set(a,b)
-      case Equals(Variable(a), Variable(b))        => facts += Set(a,b)
-      case _ =>
+    // calls to a solver for each pair.
+    def getFacts(e: Expr): Set[Set[Expr]] = e match {
+      case Not(e) => getFacts(e)
+      case LessThan(a, b)      => Set(Set(a,b))
+      case LessEquals(a, b)    => Set(Set(a,b))
+      case GreaterThan(a, b)   => Set(Set(a,b))
+      case GreaterEquals(a, b) => Set(Set(a,b))
+      case Equals(a, b)        => Set(Set(a,b))
+      case _ => Set()
     }
 
     val TopLevelAnds(as) = and(p.pc, p.phi)
-    for (e <- as) {
-      addFacts(e)
-    }
 
-    val candidates = p.as.groupBy(_.getType).mapValues{ as =>
-      as.combinations(2).filterNot(facts contains _.toSet)
+    val facts = as.flatMap(getFacts)
+
+    var varTypes: Map[TypeTree, List[Expr]] = p.as.map(_.toVariable).groupBy(_.getType)
+
+    varTypes += Int32Type -> (varTypes.getOrElse(Int32Type, Nil) :+ IntLiteral(0))
+    varTypes += IntegerType -> (varTypes.getOrElse(IntegerType, Nil) :+ InfiniteIntegerLiteral(0))
+
+    val candidates = varTypes.mapValues{ vs =>
+      vs.combinations(2).filterNot(facts contains _.toSet)
     }.values.flatten
 
     candidates.flatMap {
-      case List(a1, a2) =>
+      case List(v1, v2) =>
+        // v1 is always a variable, v2 may be a value
+        val Variable(a1) = v1
 
-        val sub1 = p.copy(
-          pc = and(Equals(Variable(a1), Variable(a2)), p.pc),
-          eb = p.qeb.filterIns( (m: Map[Identifier, Expr]) => m(a1) == m(a2))
+        val subProblems = List(
+          p.copy(as  = p.as.diff(Seq(a1)),
+                 pc  = subst(a1 -> v2, p.pc),
+                 ws  = subst(a1 -> v2, p.ws),
+                 phi = subst(a1 -> v2, p.phi),
+                 eb  = p.qeb.filterIns(Equals(v1, v2)).removeIns(Set(a1))),
+
+          p.copy(pc = and(p.pc, not(Equals(v1, v2))),
+                 eb = p.qeb.filterIns(not(Equals(v1, v2))))
         )
-        val sub2 = p.copy(
-          pc = and(not(Equals(Variable(a1), Variable(a2))), p.pc),
-          eb = p.qeb.filterIns( (m: Map[Identifier, Expr]) => m(a1) != m(a2))
-        )
 
-        val onSuccess = simpleCombine { case List(s1, s2) => IfExpr(Equals(Variable(a1), Variable(a2)), s1, s2) }
+        val onSuccess: List[Solution] => Option[Solution] = {
+          case sols @ List(sEQ, sNE) =>
+            val pre = or(
+              and(Equals(v1, v2),      sEQ.pre),
+              and(not(Equals(v1, v2)), sNE.pre)
+            )
 
-        Some(decomp(List(sub1, sub2), onSuccess, s"Eq. Split on '$a1' and '$a2'"))
+            val term = IfExpr(Equals(v1, v2), sEQ.term, sNE.term)
+
+            Some(Solution(pre, sols.flatMap(_.defs).toSet, term, sols.forall(_.isTrusted)))
+        }
+
+        Some(decomp(subProblems, onSuccess, s"Eq. Split on '$v1' and '$v2'"))
+
       case _ =>
         None
     }
