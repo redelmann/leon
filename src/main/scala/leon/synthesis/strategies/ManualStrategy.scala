@@ -22,6 +22,7 @@ class ManualStrategy(ctx: LeonContext, initCmd: Option[String], strat: Strategy)
   case object Noop extends Command
   case object Best extends Command
   case object Tree extends Command
+  case object Help extends Command
 
   // Manual search state:
   var rootNode: Node    = _
@@ -152,6 +153,19 @@ class ManualStrategy(ctx: LeonContext, initCmd: Option[String], strat: Strategy)
         case Quit =>
           None
 
+        case Help =>
+          val tOpen  = "\u001b[1m"
+          val tClose = "\u001b[0m"
+          println(s"""|
+                      |${tOpen}Available commands: $tClose
+                      |$tOpen  (cd) N  $tClose  Expand descendant N
+                      |$tOpen  cd ..   $tClose  Go one level up
+                      |$tOpen  b       $tClose  Expand best descendant
+                      |$tOpen  t       $tClose  Display the current partial solution, with the current position as a hole
+                      |$tOpen  q       $tClose  Quit the search
+                      |$tOpen  h       $tClose  Display this message
+                      |""".stripMargin)
+          manualGetNext()
         case Parent =>
           if (path.nonEmpty) {
             path = path.dropRight(1)
@@ -226,7 +240,7 @@ class ManualStrategy(ctx: LeonContext, initCmd: Option[String], strat: Strategy)
       c
 
     case Nil =>
-      print("Next action? (q to quit) "+path.mkString(" ")+" $ ")
+      print("Next action? (h for help) "+path.mkString(" ")+" $ ")
       val line = scala.io.StdIn.readLine()
       val parts = parseString(line)
 
@@ -252,6 +266,9 @@ class ManualStrategy(ctx: LeonContext, initCmd: Option[String], strat: Strategy)
 
     case "b" :: ts =>
       Best :: parseCommands(ts)
+
+    case "h" :: ts =>
+      Help :: parseCommands(ts)
 
     case "q" :: ts =>
       Quit :: Nil
