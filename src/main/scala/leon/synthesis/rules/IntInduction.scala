@@ -13,7 +13,6 @@ import purescala.Definitions._
 
 case object IntInduction extends Rule("Int Induction") {
   def instantiateOn(implicit hctx: SearchContext, p: Problem): Traversable[RuleInstantiation] = {
-    println("ASDASDASD")
     p.as match {
       case List(IsTyped(origId, IntegerType)) =>
         val tpe = tupleTypeWrap(p.xs.map(_.getType))
