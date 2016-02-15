@@ -64,7 +64,7 @@ object Rules {
     ADTSplit,
     //IntegerEquation,
     //IntegerInequalities,
-    IntInduction,
+    //IntInduction,
     IntegerSplit,
     InnerCaseSplit
     //new OptimisticInjection(_),
