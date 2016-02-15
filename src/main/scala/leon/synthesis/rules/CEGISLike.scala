@@ -21,7 +21,7 @@ import evaluators._
 import datagen._
 import codegen.CodeGenParams
 
-import scala.collection.mutable.{HashMap=>MutableMap, ArrayBuffer}
+import scala.collection.mutable.{ArrayBuffer, HashMap => MutableMap, Set => MutableSet}
 
 abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
@@ -198,7 +198,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
         }
 
         bsOrdered = bs.toSeq.sorted
-        excludedPrograms = ArrayBuffer()
+        excludedPrograms.clear()
 
         setCExpr(computeCExpr())
         ctx.timers.synthesis.cegis.updateCTree.stop()
@@ -564,9 +564,11 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
         Right(cexs)
       }
 
-      var excludedPrograms = ArrayBuffer[Set[Identifier]]()
+      val excludedPrograms = MutableSet[Set[Identifier]]()
 
-      def allProgramsClosed = allProgramsCount() <= excludedPrograms.size
+      def allProgramsClosed = {
+        allProgramsCount() <= excludedPrograms.size
+      }
 
       // Explicitly remove program computed by bValues from the search space
       //
@@ -914,7 +916,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
                 case Some(Some(bs)) =>
                   // No inputs to test or all valid inputs also work with this.
                   // We need to make sure by validating this candidate with z3
-                  sctx.reporter.debug("Found tentative model, need to validate!")
+                  sctx.reporter.debug(s"Found tentative model ${ndProgram.getExpr(bs)}, need to validate!")
                   ndProgram.solveForCounterExample(bs) match {
                     case Some(Some(inputsCE)) =>
                       sctx.reporter.debug("Found counter-example:" + inputsCE)
@@ -925,7 +927,10 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
                       // Retest whether the newly found C-E invalidates some programs
                       prunedPrograms.foreach { p =>
-                        if (!ndProgram.testForProgram(p)(ce)) ndProgram.excludeProgram(p, true)
+                        if (!ndProgram.testForProgram(p)(ce)) {
+                          prunedPrograms -= p
+                          ndProgram.excludeProgram(p, true)
+                        }
                       }
 
                     case Some(None) =>
