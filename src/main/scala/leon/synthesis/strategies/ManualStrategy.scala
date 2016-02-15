@@ -2,9 +2,10 @@
 
 package leon
 package synthesis
-package graph
+package strategies
 
-import strategies._
+import graph._
+
 import purescala.Common.FreshIdentifier
 
 import scala.annotation.tailrec
