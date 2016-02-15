@@ -92,19 +92,19 @@ class ManualStrategy(ctx: LeonContext, initCmd: Option[String], strat: Strategy)
     def solved(str: String)   = "\u001b[32m" + str + "\u001b[0m"
     def expanded(str: String) = "\u001b[33m" + str + "\u001b[0m"
 
-    def displayNode(n: Node): String = {
+    def displayNode(n: Node, inTitle: Boolean = false): String = {
       n match {
         case an: AndNode =>
           val app = an.ri.asString(ctx)
-          s"(${debugInfoFor(n)}) ${indent(app)}"
+          s"(${debugInfoFor(n)}) ${indent(app, inTitle)}"
         case on: OrNode =>
           val p = on.p.asString(ctx)
-          s"(${debugInfoFor(n)}) ${indent(p)}"
+          s"(${debugInfoFor(n)}) ${indent(p, inTitle)}"
       }
     }
 
-    def indent(a: String): String = {
-      a.replaceAll("\n", "\n"+(" "*12))
+    def indent(a: String, inTitle: Boolean): String = {
+      a.replaceAll("\n", "\n"+(" "*(if(inTitle) 11 else 13)))
     }
 
     def pathToString(cd: List[Int]): String = {
@@ -114,9 +114,9 @@ class ManualStrategy(ctx: LeonContext, initCmd: Option[String], strat: Strategy)
     val c = currentNode(path)
 
     println("-"*120)
-    val at = path.lastOption.map(p => pathToString(List(p))).getOrElse("R")
+    val at = path.lastOption.map(p => pathToString(List(p))).getOrElse(" R")
 
-    println(title(at+" \u2510 "+displayNode(c)))
+    println(title(at+" \u2510 "+displayNode(c, true)))
 
     for ((sn, i) <- c.descendants.zipWithIndex) {
       val sp = List(i)
