@@ -249,44 +249,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
           SeqUtils.cartesianProduct(seqs).map(_.flatten.toSet)
         }
 
-        /*def redundant(e: Expr): Boolean = {
-          val (op1, op2) = e match {
-            case Minus(o1, o2) => (o1, o2)
-            case Modulo(o1, o2) => (o1, o2)
-            case Division(o1, o2) => (o1, o2)
-            case BVMinus(o1, o2) => (o1, o2)
-            case BVRemainder(o1, o2) => (o1, o2)
-            case BVDivision(o1, o2) => (o1, o2)
-
-            case And(Seq(Not(o1), Not(o2))) => (o1, o2)
-            case And(Seq(Not(o1), o2)) => (o1, o2)
-            case And(Seq(o1, Not(o2))) => (o1, o2)
-            case And(Seq(o1, o2)) => (o1, o2)
-
-            case Or(Seq(Not(o1), Not(o2))) => (o1, o2)
-            case Or(Seq(Not(o1), o2)) => (o1, o2)
-            case Or(Seq(o1, Not(o2))) => (o1, o2)
-            case Or(Seq(o1, o2)) => (o1, o2)
-
-            case SetUnion(o1, o2) => (o1, o2)
-            case SetIntersection(o1, o2) => (o1, o2)
-            case SetDifference(o1, o2) => (o1, o2)
-
-            case Equals(Not(o1), Not(o2)) => (o1, o2)
-            case Equals(Not(o1), o2) => (o1, o2)
-            case Equals(o1, Not(o2)) => (o1, o2)
-            case Equals(o1, o2) => (o1, o2)
-            case _ => return false
-          }
-
-          op1 == op2
-        }*/
-
-        allProgramsFor(Seq(rootC))/* filterNot { bs =>
-          val res = params.optimizations && exists(redundant)(getExpr(bs))
-          if (!res) excludeProgram(bs, false)
-          res
-        }*/
+        allProgramsFor(Seq(rootC))
       }
 
       private def debugCTree(cTree: Map[Identifier, Seq[(Identifier, Seq[Expr] => Expr, Seq[Identifier])]],
@@ -443,8 +406,51 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
       // Tests a candidate solution against an example in the correct environment
       def testForProgram(bValues: Set[Identifier])(ex: Example): Boolean = {
 
+        def redundant(e: Expr): Boolean = {
+          val (op1, op2) = e match {
+            case Minus(o1, o2) => (o1, o2)
+            case Modulo(o1, o2) => (o1, o2)
+            case Division(o1, o2) => (o1, o2)
+            case BVMinus(o1, o2) => (o1, o2)
+            case BVRemainder(o1, o2) => (o1, o2)
+            case BVDivision(o1, o2) => (o1, o2)
+
+            case And(Seq(Not(o1), Not(o2))) => (o1, o2)
+            case And(Seq(Not(o1), o2)) => (o1, o2)
+            case And(Seq(o1, Not(o2))) => (o1, o2)
+            case And(Seq(o1, o2)) => (o1, o2)
+
+            case Or(Seq(Not(o1), Not(o2))) => (o1, o2)
+            case Or(Seq(Not(o1), o2)) => (o1, o2)
+            case Or(Seq(o1, Not(o2))) => (o1, o2)
+            case Or(Seq(o1, o2)) => (o1, o2)
+
+            case SetUnion(o1, o2) => (o1, o2)
+            case SetIntersection(o1, o2) => (o1, o2)
+            case SetDifference(o1, o2) => (o1, o2)
+
+            case Equals(Not(o1), Not(o2)) => (o1, o2)
+            case Equals(Not(o1), o2) => (o1, o2)
+            case Equals(o1, Not(o2)) => (o1, o2)
+            case Equals(o1, o2) => (o1, o2)
+            case _ => return false
+          }
+
+          op1 == op2
+        }
+
         val origImpl = cTreeFd.fullBody
         val outerSol = getExpr(bValues)
+
+        val redundancyCheck = false
+
+        // This program contains a simplifiable expression,
+        // which means it is equivalent to a simpler one
+        // Deactivated for now, since it doesnot seem to help
+        if (redundancyCheck && params.optimizations && exists(redundant)(outerSol)) {
+          excludeProgram(bs, true)
+          return false
+        }
         val innerSol = outerExprToInnerExpr(outerSol)
         val cnstr = letTuple(p.xs, innerSol, innerPhi)
         cTreeFd.fullBody = innerSol
