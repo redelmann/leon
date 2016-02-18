@@ -68,6 +68,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
     // Represents a non-deterministic program
     object NonDeterministicProgram {
 
+      // Current synthesized term size
       private var termSize = 0
 
       def unfolding = termSize
@@ -99,13 +100,15 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
        */
       private var cTree: Map[Identifier, Seq[(Identifier, Seq[Expr] => Expr, Seq[Identifier])]] = Map()
 
-      // C identifiers corresponding to p.xs
+      // Top-level C identifiers corresponding to p.xs
       private var rootC: Identifier          = _
 
+      // Blockers
       private var bs: Set[Identifier]        = Set()
 
       private var bsOrdered: Seq[Identifier] = Seq()
 
+      // Generator of fresh cs that minimizes labels
       class CGenerator {
         private var buffers = Map[SizedNonTerm[T], Stream[Identifier]]()
 
@@ -131,9 +134,12 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
         }
       }
 
+      // Programs we have manually excluded
       var excludedPrograms = Set[Set[Identifier]]()
+      // Still live programs (allPrograms -- excludedPrograms)
       var prunedPrograms   = Set[Set[Identifier]]()
 
+      // Update the c-tree after an increase in termsize
       def updateCTree(): Unit = {
         ctx.timers.synthesis.cegis.updateCTree.start()
         def freshB() = {
@@ -184,7 +190,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
         }
 
         bsOrdered = bs.toSeq.sorted
-        setCExpr(computeCExpr())
+        setCExpr()
 
         excludedPrograms = Set()
         prunedPrograms = allPrograms().toSet
@@ -300,57 +306,16 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
         }
       }
 
-      private def computeCExpr(): (Expr, Seq[FunDef]) = {
-        var cToFd = Map[Identifier, FunDef]()
-
-        def exprOf(alt: (Identifier, Seq[Expr] => Expr, Seq[Identifier])): Expr = {
-          val (_, builder, cs) = alt
-
-          val e = builder(cs.map { c =>
-            val fd = cToFd(c)
-            FunctionInvocation(fd.typed, fd.params.map(_.toVariable))
-          })
-
-          outerExprToInnerExpr(e)
-        }
-
-        // Define all C-def
-        for ((c, alts) <- cTree) yield {
-          cToFd += c -> new FunDef(FreshIdentifier(c.asString, alwaysShowUniqueID = true), Seq(), p.as.map(id => ValDef(id)), c.getType)
-        }
-
-        // Fill C-def bodies
-        for ((c, alts) <- cTree) {
-
-          val body = if (alts.nonEmpty) {
-            alts.init.foldLeft(exprOf(alts.last)) {
-              case (e, alt) => IfExpr(alt._1.toVariable, exprOf(alt), e)
-            }
-          } else {
-            Error(c.getType, s"Empty production rule: $c")
-          }
-
-          cToFd(c).fullBody = body
-        }
-
-        // Top-level expression for rootC
-        val expr = {
-          val fd = cToFd(rootC)
-          FunctionInvocation(fd.typed, fd.params.map(_.toVariable))
-        }
-
-        (expr, cToFd.values.toSeq)
-      }
-
-
-
+      // The function which calls the synthesized expression within programCTree
       private val cTreeFd = new FunDef(FreshIdentifier("cTree", alwaysShowUniqueID = true), Seq(), p.as.map(id => ValDef(id)), p.outType)
 
+      // Same as cTreeFd, but ensuring the spec of the problem
       private val solFd = new FunDef(FreshIdentifier("solFd", alwaysShowUniqueID = true), Seq(), p.as.map(id => ValDef(id)), p.outType)
 
+      // The spec of the problem
       private val phiFd = new FunDef(FreshIdentifier("phiFd", alwaysShowUniqueID = true), Seq(), p.as.map(id => ValDef(id)), BooleanType)
 
-
+      // The program with the body of the current function replaced by the current partial solution
       private val (innerProgram, origFdMap) = {
 
         val outerSolution = {
@@ -411,14 +376,62 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
       private val innerPc  = outerExprToInnerExpr(p.pc)
       private val innerPhi = outerExprToInnerExpr(p.phi)
 
+      // The program with the c-tree functions
       private var programCTree: Program = _
 
       private var evaluator: DefaultEvaluator = _
 
-      private def setCExpr(cTreeInfo: (Expr, Seq[FunDef])): Unit = {
-        val (cTree, newFds) = cTreeInfo
+      // Updates the program with the C tree after recalculating all relevant FunDef's
+      private def setCExpr(): Unit = {
 
-        cTreeFd.body = Some(cTree)
+        // Computes a Seq of functions corresponding to the choices made at each non-terminal of the grammar,
+        // and an expression which calls the top-level one.
+        def computeCExpr(): (Expr, Seq[FunDef]) = {
+          var cToFd = Map[Identifier, FunDef]()
+
+          def exprOf(alt: (Identifier, Seq[Expr] => Expr, Seq[Identifier])): Expr = {
+            val (_, builder, cs) = alt
+
+            val e = builder(cs.map { c =>
+              val fd = cToFd(c)
+              FunctionInvocation(fd.typed, fd.params.map(_.toVariable))
+            })
+
+            outerExprToInnerExpr(e)
+          }
+
+          // Define all C-def
+          for ((c, alts) <- cTree) yield {
+            cToFd += c -> new FunDef(FreshIdentifier(c.asString, alwaysShowUniqueID = true), Seq(), p.as.map(id => ValDef(id)), c.getType)
+          }
+
+          // Fill C-def bodies
+          for ((c, alts) <- cTree) {
+
+            val body = if (alts.nonEmpty) {
+              alts.init.foldLeft(exprOf(alts.last)) {
+                case (e, alt) => IfExpr(alt._1.toVariable, exprOf(alt), e)
+              }
+            } else {
+              Error(c.getType, s"Empty production rule: $c")
+            }
+
+            cToFd(c).fullBody = body
+          }
+
+          // Top-level expression for rootC
+          val expr = {
+            val fd = cToFd(rootC)
+            FunctionInvocation(fd.typed, fd.params.map(_.toVariable))
+          }
+
+          (expr, cToFd.values.toSeq)
+        }
+
+
+        val (cExpr, newFds) = computeCExpr()
+
+        cTreeFd.body = Some(cExpr)
         programCTree = addFunDefs(innerProgram, newFds, cTreeFd)
         evaluator = new DefaultEvaluator(sctx.context, programCTree)
 
@@ -427,6 +440,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
         //println(".. "*30)
       }
 
+      // Tests a candidate solution against an example in the correct environment
       def testForProgram(bValues: Set[Identifier])(ex: Example): Boolean = {
 
         val origImpl = cTreeFd.fullBody
@@ -488,8 +502,8 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
       }
 
       /**
-       * Here we check the validity of a given program in isolation, we compute
-       * the corresponding expr and replace it in place of the C-tree
+       * Here we check the validity of a (small) number of programs in isolation.
+       * We keep track of CEXs generated by invalid programs and preemptively filter the rest of the programs with them.
        */
       def validatePrograms(bss: Set[Set[Identifier]]): Either[Stream[Solution], Seq[Seq[Expr]]] = {
         val origImpl = cTreeFd.fullBody
@@ -497,6 +511,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
         var cexs = Seq[Seq[Expr]]()
 
         for (bs <- bss.toSeq) {
+          // We compute the corresponding expr and replace it in place of the C-tree
           val outerSol = getExpr(bs)
           val innerSol = outerExprToInnerExpr(outerSol)
           //println(s"Testing $outerSol")
@@ -584,7 +599,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
       }
 
       /**
-       * First phase of CEGIS: solve for potential programs (that work on at least one input)
+       * First phase of CEGIS: discover potential programs (that work on at least one input)
        */
       def solveForTentativeProgram(): Option[Option[Set[Identifier]]] = {
         val solverf = SolverFactory.getFromSettings(ctx, programCTree).withTimeout(exSolverTo)
@@ -709,13 +724,9 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
         val ndProgram = NonDeterministicProgram
         ndProgram.init()
 
-        sctx.reporter.ifDebug { printer =>
-          ndProgram.grammar.printProductions(printer)
-        }
-
-        // We populate the list of examples with a defined one
         sctx.reporter.debug("Acquiring initial list of examples")
 
+        // To the list of known examples, we add an additional one produced by the solver
         val solverExample = if (p.pc == BooleanLiteral(true)) {
           InExample(p.as.map(a => simplestValue(a.getType)))
         } else {
@@ -754,7 +765,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
         }
 
         /**
-         * We generate tests for discarding potential programs
+         * We (lazily) generate additional tests for discarding potential programs with a data generator
          */
         val nTests = if (p.pc == BooleanLiteral(true)) 50 else 20
 
@@ -765,8 +776,10 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
           new GrammarDataGen(evaluator, ValueGrammar).generateFor(p.as, p.pc, nTests, 1000).map(InExample)
         }
 
+        // This is the starting test-base
         val gi = new GrowableIterable[Example](baseExampleInputs, inputGenerator)
 
+        // We keep number of failures per test to pull the better ones to the front
         val failedTestsStats = new MutableMap[Example, Int]().withDefaultValue(0)
 
         def hasInputExamples = gi.nonEmpty
@@ -782,7 +795,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
         try {
           do {
-            // Handle for one specific unfolding level
+            // Run CEGIS for one specific unfolding level
 
             // Unfold formula
             ndProgram.unfold()
@@ -846,6 +859,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
               timers.loop.start()
               ctx.reporter.debug("Programs left: " + ndProgram.prunedPrograms.size)
 
+              // Phase 0: If the number of remaining programs is small, validate them individually
               if (nInitial / nPassing > testReductionRatio || nPassing <= 5) {
                 val programsToValidate = ndProgram.prunedPrograms
                 sctx.reporter.debug(s"Will send ${programsToValidate.size} program(s) to validate individually")
@@ -862,22 +876,19 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
                 ctx.reporter.debug(s"#Programs after validating individually: ${ndProgram.prunedPrograms.size}")
               }
 
-
-              // End phase 1
-
-              // Phase 2
               if (!ndProgram.allProgramsClosed) {
+                // Phase 1: Find a candidate program that works for at least 1 input
                 ndProgram.solveForTentativeProgram() match {
                   case Some(Some(bs)) =>
-                    // No inputs to test or all valid inputs also work with this.
-                    // We need to make sure by validating this candidate with z3
                     sctx.reporter.debug(s"Found tentative model ${ndProgram.getExpr(bs)}, need to validate!")
+                    // Phase 2: Validate candidate model
                     ndProgram.solveForCounterExample(bs) match {
                       case Some(Some(inputsCE)) =>
                         sctx.reporter.debug("Found counter-example:" + inputsCE)
                         val ce = InExample(inputsCE)
-                        // Found counter example! Exclude this program
+                        // Found counterexample! Exclude this program
                         gi += ce
+                        failedTestsStats(ce) += 1
                         ndProgram.excludeProgram(bs, false)
 
                         // Retest whether the newly found C-E invalidates some programs
@@ -910,7 +921,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
                     }
 
                   case Some(None) =>
-                    sctx.reporter.debug("All programs fail!")
+                    sctx.reporter.debug("There exists no candidate program!")
                     ndProgram.prunedPrograms foreach (ndProgram.excludeProgram(_, true))
 
                   case None =>
