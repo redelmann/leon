@@ -120,7 +120,7 @@ case object StringRender extends Rule("StringRender") {
   /** Returns a stream of assignments compatible with input/output examples for the given template */
   def findAssignments(p: Program, inputs: Seq[Identifier], examples: ExamplesBank, template: Expr)(implicit hctx: SearchContext): Stream[Map[Identifier, String]] = {
     //new Evaluator()
-    val e = new StringTracingEvaluator(hctx.context, p)
+    val e = new StringTracingEvaluator(hctx, p)
     
     @tailrec def gatherEquations(s: List[InOutExample], acc: ListBuffer[Equation] = ListBuffer()): Option[SProblem] = s match {
       case Nil => Some(acc.toList)
@@ -168,7 +168,7 @@ case object StringRender extends Rule("StringRender") {
     
     def computeSolutions(funDefsBodies: Seq[(FunDef, WithIds[Expr])], template: WithIds[Expr]): Stream[Assignment] = {
       val funDefs = for((funDef, body) <- funDefsBodies) yield  { funDef.body = Some(body._1); funDef }
-      val newProgram = DefOps.addFunDefs(hctx.program, funDefs, hctx.sctx.functionContext)
+      val newProgram = DefOps.addFunDefs(hctx.program, funDefs, hctx.functionContext)
       findAssignments(newProgram, p.as, examples, template._1)
     }
     
@@ -276,9 +276,9 @@ case object StringRender extends Rule("StringRender") {
   /** Creates an empty function definition for the dependent type */
   def createEmptyFunDef(ctx: StringSynthesisContext, tpe: DependentType)(implicit hctx: SearchContext): FunDef = {
     def defaultFunName(t: TypeTree) = t match {
-      case AbstractClassType(c, d) => c.id.asString(hctx.context)
-      case CaseClassType(c, d) => c.id.asString(hctx.context)
-      case t => t.asString(hctx.context)
+      case AbstractClassType(c, d) => c.id.asString(hctx)
+      case CaseClassType(c, d) => c.id.asString(hctx)
+      case t => t.asString(hctx)
     }
     
     val funName2 = tpe.caseClassParent match {
@@ -288,7 +288,7 @@ case object StringRender extends Rule("StringRender") {
     val funName3 = funName2.replaceAll("[^a-zA-Z0-9_]","")
     val funName = funName3(0).toLower + funName3.substring(1) 
     val funId = FreshIdentifier(ctx.freshFunName(funName), alwaysShowUniqueID = true)
-    val argId= FreshIdentifier(tpe.typeToConvert.asString(hctx.context).toLowerCase()(0).toString, tpe.typeToConvert)
+    val argId= FreshIdentifier(tpe.typeToConvert.asString(hctx).toLowerCase()(0).toString, tpe.typeToConvert)
     val fd = new FunDef(funId, Nil, ValDef(argId) :: Nil, StringType) // Empty function.
     fd
   }
@@ -362,7 +362,7 @@ case object StringRender extends Rule("StringRender") {
         result: ListBuffer[Stream[WithIds[Expr]]] = ListBuffer()): (List[Stream[WithIds[Expr]]], StringSynthesisResult) = inputs match {
       case Nil => (result.toList, ctx.result)
       case input::q => 
-        val dependentType = DependentType(ctx.currentCaseClassParent, input.asString(hctx.program)(hctx.context), input.getType)
+        val dependentType = DependentType(ctx.currentCaseClassParent, input.asString(hctx.program)(hctx), input.getType)
         ctx.result.adtToString.get(dependentType) match {
         case Some(fd) =>
           gatherInputs(ctx, q, result += Stream((functionInvocation(fd._1, Seq(input)), Nil)))
@@ -459,7 +459,7 @@ case object StringRender extends Rule("StringRender") {
         
         val defaultToStringFunctions = defaultMapTypeToString()
         
-        val examplesFinder = new ExamplesFinder(hctx.context, hctx.program)
+        val examplesFinder = new ExamplesFinder(hctx, hctx.program)
         val examples = examplesFinder.extractFromProblem(p)
         
         val ruleInstantiations = ListBuffer[RuleInstantiation]()

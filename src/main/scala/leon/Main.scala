@@ -135,7 +135,7 @@ object Main {
       for (lo <- leonOptions) debug(lo.toString)
     }
 
-    LeonContext(
+    new LeonContext(
       reporter = reporter,
       files = files,
       options = leonOptions.toSeq,

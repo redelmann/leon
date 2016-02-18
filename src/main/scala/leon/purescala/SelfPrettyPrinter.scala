@@ -24,9 +24,13 @@ import leon.evaluators
 
 /** This pretty-printer uses functions defined in Leon itself.
   * If not pretty printing function is defined, return the default value instead
-  * @param The list of functions which should be excluded from pretty-printing (to avoid rendering counter-examples of toString methods using the method itself)
-  * @return a user defined string for the given typed expression. */
+ */
 object SelfPrettyPrinter {
+  /** @param excluded The list of functions which should be excluded from pretty-printing
+    *                 (to avoid rendering counter-examples of toString methods using the method itself)
+    * @return a user defined string for the given typed expression.
+    **/
+
   def print(v: Expr, orElse: =>String, excluded: FunDef => Boolean = Set())(implicit ctx: LeonContext, program: Program): String = {
     (program.definedFunctions find {
       case fd if !excluded(fd) =>

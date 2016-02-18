@@ -9,16 +9,16 @@ import java.io.File
 import scala.reflect.ClassTag
 
 /** Everything that is part of a compilation unit, except the actual program tree.
-  * Contexts are immutable, and so should all their fields (with the possible
+  * LeonContexts are immutable, and so should all their fields (with the possible
   * exception of the reporter).
   */
-case class LeonContext(
-  reporter: Reporter,
-  interruptManager: InterruptManager,
-  options: Seq[LeonOption[Any]] = Seq(),
-  files: Seq[File] = Seq(),
-  classDir: Option[File] = None,
-  timers: TimerStorage = new TimerStorage
+class LeonContext(
+  val reporter: Reporter,
+  val interruptManager: InterruptManager,
+  val options: Seq[LeonOption[Any]] = Seq(),
+  val files: Seq[File] = Seq(),
+  val classDir: Option[File] = None,
+  val timers: TimerStorage = new TimerStorage
 ) {
 
   def findOption[A: ClassTag](optDef: LeonOptionDef[A]): Option[A] = options.collectFirst {
@@ -27,17 +27,39 @@ case class LeonContext(
 
   def findOptionOrDefault[A: ClassTag](optDef: LeonOptionDef[A]): A =
     findOption(optDef).getOrElse(optDef.default)
+
+  def copy(
+    reporter: Reporter = this.reporter,
+    interruptManager: InterruptManager = this.interruptManager,
+    options: Seq[LeonOption[Any]] = this.options,
+    files: Seq[File] = this.files,
+    classDir: Option[File] = this.classDir,
+    timers: TimerStorage = this.timers
+  ) = {
+    new LeonContext(
+      reporter,
+      interruptManager,
+      options,
+      files,
+      classDir,
+      timers
+    )
+  }
+
 }
 
 object LeonContext {
   def empty = {
     val reporter = new DefaultReporter(Set())
-    LeonContext(reporter, new InterruptManager(reporter))
+    new LeonContext(reporter, new InterruptManager(reporter))
   }
 
   def printNames = {
-    empty.copy(options =
-      Seq(LeonOption[Set[DebugSection]](SharedOptions.optDebug)(Set(DebugSectionTrees)))
+    val reporter = new DefaultReporter(Set())
+    new LeonContext(
+      reporter,
+      new InterruptManager(reporter),
+      options = Seq(LeonOption[Set[DebugSection]](SharedOptions.optDebug)(Set(DebugSectionTrees)))
     )
   }
 }
