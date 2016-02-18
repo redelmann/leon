@@ -66,7 +66,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
     }
 
     // Represents a non-deterministic program
-    class NonDeterministicProgram(val p: Problem) {
+    object NonDeterministicProgram {
 
       private var termSize = 0
 
@@ -706,7 +706,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
         val sctx = hctx.sctx
         implicit val ctx = sctx.context
 
-        val ndProgram = new NonDeterministicProgram(p)
+        val ndProgram = NonDeterministicProgram
         ndProgram.init()
 
         sctx.reporter.ifDebug { printer =>
