@@ -215,21 +215,6 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
       }
 
       /**
-       * Keeps track of blocked Bs and which C are affected, assuming cs are undefined:
-       *
-       * b2 -> Set(c4)
-       * b3 -> Set(c4)
-       */
-      private var closedBs: Set[Identifier] = Set()
-      def closeB(b: Identifier) = closedBs += b
-
-      /**
-       * Checks if 'b' is closed (meaning it depends on uninterpreted terms)
-       */
-      def isBActive(b: Identifier) = !closedBs.contains(b)
-
-
-      /**
        * Returns all possible assignments to Bs in order to enumerate all possible programs
        */
       def allPrograms(): Traversable[Set[Identifier]] = {
@@ -245,7 +230,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
         def allProgramsFor(cs: Seq[Identifier]): Seq[Set[Identifier]] = {
           val seqs = for (c <- cs) yield {
             if (!(cache contains c)) {
-              val subs = for ((b, _, subcs) <- cTree(c) if isBActive(b)) yield {
+              val subs = for ((b, _, subcs) <- cTree(c)) yield {
                 if (subcs.isEmpty) {
                   Seq(Set(b))
                 } else {
@@ -309,13 +294,12 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
           println()
           println(f"$c%-4s :=")
           for ((b, builder, cs) <- alts ) {
-            val active = if (isBActive(b)) " " else "⨯"
             val markS   = if (markedBs(b)) Console.GREEN else ""
             val markE   = if (markedBs(b)) Console.RESET else ""
 
             val ex = builder(cs.map(_.toVariable)).asString
 
-            println(f"      $markS$active  ${b.asString}%-4s => $ex%-40s [${cs.map(_.asString).mkString(", ")}]$markE")
+            println(f"      $markS  ${b.asString}%-4s => $ex%-40s [${cs.map(_.asString).mkString(", ")}]$markE")
           }
         }
       }
@@ -341,10 +325,9 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
         // Fill C-def bodies
         for ((c, alts) <- cTree) {
-          val activeAlts = alts.filter(a => isBActive(a._1))
 
-          val body = if (activeAlts.nonEmpty) {
-            activeAlts.init.foldLeft(exprOf(activeAlts.last)) {
+          val body = if (alts.nonEmpty) {
+            alts.init.foldLeft(exprOf(alts.last)) {
               case (e, alt) => IfExpr(alt._1.toVariable, exprOf(alt), e)
             }
           } else {
@@ -497,7 +480,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
       def getExpr(bValues: Set[Identifier]): Expr = {
 
         def getCValue(c: Identifier): Expr = {
-          cTree(c).find(i => bValues(i._1) && isBActive(i._1)).map {
+          cTree(c).find(i => bValues(i._1)).map {
             case (b, builder, cs) =>
               builder(cs.map(getCValue))
           }.getOrElse {
@@ -581,11 +564,10 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
       //
       // If the bValues comes from models, we make sure the bValues we exclude
       // are minimal we make sure we exclude only Bs that are used.
-      def excludeProgram(bValues: Set[Identifier], isMinimal: Boolean): Unit = {
-        val bs = bValues.filter(isBActive)
+      def excludeProgram(bs: Set[Identifier], isMinimal: Boolean): Unit = {
 
         def filterBTree(c: Identifier): Set[Identifier] = {
-          (for ((b, _, subcs) <- cTree(c) if bValues(b)) yield {
+          (for ((b, _, subcs) <- cTree(c) if bs(b)) yield {
            Set(b) ++ subcs.flatMap(filterBTree)
           }).toSet.flatten
         }
@@ -624,26 +606,22 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
           solver.assertCnstr(toFind)
 
           for ((c, alts) <- cTree) {
-            val activeBs = alts.map(_._1).filter(isBActive)
 
-            val either = for (a1 <- activeBs; a2 <- activeBs if a1 < a2) yield {
+            val bs = alts.map(_._1)
+
+            val either = for (a1 <- bs; a2 <- bs if a1 < a2) yield {
               Or(Not(a1.toVariable), Not(a2.toVariable))
             }
 
-            if (activeBs.nonEmpty) {
+            if (bs.nonEmpty) {
               //println(" - "+andJoin(either).asString)
               solver.assertCnstr(andJoin(either))
 
-              val oneOf = orJoin(activeBs.map(_.toVariable))
+              val oneOf = orJoin(bs.map(_.toVariable))
               //println(" - "+oneOf.asString)
               solver.assertCnstr(oneOf)
             }
           }
-
-          //println(" -- Active:")
-          val isActive = andJoin(bsOrdered.filterNot(isBActive).map(id => Not(id.toVariable)))
-          //println("  - "+isActive.asString)
-          solver.assertCnstr(isActive)
 
           //println(" -- Excluded:")
           for (ex <- excludedPrograms) {
@@ -694,7 +672,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
 
         try {
-          solver.assertCnstr(andJoin(bsOrdered.map(b => if (bs(b) && isBActive(b)) b.toVariable else Not(b.toVariable))))
+          solver.assertCnstr(andJoin(bsOrdered.map(b => if (bs(b)) b.toVariable else Not(b.toVariable))))
           solver.assertCnstr(innerPc)
           solver.assertCnstr(Not(cnstr))
 
