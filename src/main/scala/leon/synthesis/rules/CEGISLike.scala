@@ -169,8 +169,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
             val alts = grammar.getProductions(l)
 
-            val cTreeData = for (gen <- alts) yield {
-              val b = freshB()
+            val cTreeData = alts flatMap { gen =>
 
               // Optimize labels
               cGen.rewind()
@@ -180,8 +179,12 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
                 defineCTreeFor(sl, subC)
                 subC
               }
+              
+              if (subCs.forall(sc => cTree(sc).nonEmpty)) {
+                val b = freshB()
 
-              (b, gen.builder, subCs)
+                Some((b, gen.builder, subCs))
+              } else None
             }
 
             cTree += c -> cTreeData
@@ -217,7 +220,8 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
        * b2 -> Set(c4)
        * b3 -> Set(c4)
        */
-      private val closedBs: Map[Identifier, Set[Identifier]] = Map()
+      private var closedBs: Set[Identifier] = Set()
+      def closeB(b: Identifier) = closedBs += b
 
       /**
        * Checks if 'b' is closed (meaning it depends on uninterpreted terms)
@@ -493,7 +497,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
       def getExpr(bValues: Set[Identifier]): Expr = {
 
         def getCValue(c: Identifier): Expr = {
-          cTree(c).find(i => bValues(i._1)).map {
+          cTree(c).find(i => bValues(i._1) && isBActive(i._1)).map {
             case (b, builder, cs) =>
               builder(cs.map(getCValue))
           }.getOrElse {
@@ -658,7 +662,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
               //println("Tentative model: "+model.asString)
               //println("Tentative model: "+bModel.filter(isBActive).map(_.asString).toSeq.sorted)
               //println("Tentative expr: "+getExpr(bModel))
-
+            
               Some(Some(bModel))
 
             case Some(false) =>
@@ -690,7 +694,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
 
         try {
-          solver.assertCnstr(andJoin(bsOrdered.map(b => if (bs(b)) b.toVariable else Not(b.toVariable))))
+          solver.assertCnstr(andJoin(bsOrdered.map(b => if (bs(b) && isBActive(b)) b.toVariable else Not(b.toVariable))))
           solver.assertCnstr(innerPc)
           solver.assertCnstr(Not(cnstr))
 
@@ -825,7 +829,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
             //}
 
             // We further filter the set of working programs to remove those that fail on known examples
-            if (hasInputExamples) {
+            if (false && hasInputExamples) {
               timers.filter.start()
               for (bs <- ndProgram.prunedPrograms if !interruptManager.isInterrupted) {
                 val examples = allInputExamples()
@@ -863,7 +867,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
               }
             }
 
-            if (!ndProgram.allProgramsClosed && !interruptManager.isInterrupted) {
+            if (false && !ndProgram.allProgramsClosed && !interruptManager.isInterrupted) {
               // If the number of pruned programs is very small, or by far smaller than the number of total programs,
               // we hypothesize it will be easier to just validate them individually.
               // Otherwise, we validate a small number of programs just in case we are lucky FIXME is this last clause useful?
