@@ -51,6 +51,7 @@ object Rules {
     UnusedInput,
     EquivalentInputs,
     UnconstrainedOutput,
+    if(naiveGrammar) NaiveCEGIS else CEGIS,
     OptimisticGround,
     EqualitySplit,
     InequalitySplit,
@@ -65,7 +66,7 @@ object Rules {
     //IntegerEquation,
     //IntegerInequalities,
     //IntInduction,
-    IntegerSplit,
+    //IntegerSplit,
     InnerCaseSplit
     //new OptimisticInjection(_),
     //new SelectiveInlining(_),
