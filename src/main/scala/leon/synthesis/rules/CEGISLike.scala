@@ -269,9 +269,6 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
       // The function which calls the synthesized expression within programCTree
       private val cTreeFd = new FunDef(FreshIdentifier("cTree", alwaysShowUniqueID = true), Seq(), p.as.map(id => ValDef(id)), p.outType)
 
-      // Same as cTreeFd, but ensuring the spec of the problem
-      private val solFd = new FunDef(FreshIdentifier("solFd", alwaysShowUniqueID = true), Seq(), p.as.map(id => ValDef(id)), p.outType)
-
       // The spec of the problem
       private val phiFd = new FunDef(FreshIdentifier("phiFd", alwaysShowUniqueID = true), Seq(), p.as.map(id => ValDef(id)), BooleanType)
 
@@ -280,18 +277,13 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
         val outerSolution = {
           new PartialSolution(hctx.search.strat, true)
-            .solutionAround(hctx.currentNode)(FunctionInvocation(solFd.typed, p.as.map(_.toVariable)))
+            .solutionAround(hctx.currentNode)(FunctionInvocation(cTreeFd.typed, p.as.map(_.toVariable)))
             .getOrElse(hctx.reporter.fatalError("Unable to get outer solution"))
         }
 
-        val program0 = addFunDefs(hctx.program, Seq(cTreeFd, solFd, phiFd) ++ outerSolution.defs, hctx.ci.fd)
+        val program0 = addFunDefs(hctx.program, Seq(cTreeFd, phiFd) ++ outerSolution.defs, hctx.ci.fd)
 
         cTreeFd.body = None
-
-        solFd.fullBody = Ensuring(
-          FunctionInvocation(cTreeFd.typed, p.as.map(_.toVariable)),
-          Lambda(p.xs.map(ValDef), p.phi)
-        )
 
         phiFd.body = Some(
           letTuple(p.xs,
@@ -314,7 +306,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
           // We freshen/duplicate every functions, except these two as they are
           // fresh anyway and we refer to them directly.
-          case `cTreeFd` | `phiFd` | `solFd` =>
+          case `cTreeFd` | `phiFd` =>
             None
 
           case fd =>
@@ -517,7 +509,8 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
           // We compute the corresponding expr and replace it in place of the C-tree
           val outerSol = getExpr(bs)
           val innerSol = outerExprToInnerExpr(outerSol)
-          //println(s"Testing $outerSol")
+          //println(s"Testing $innerSol")
+          //println(innerProgram)
           cTreeFd.fullBody = innerSol
 
           val cnstr = and(innerPc, letTuple(p.xs, innerSol, Not(innerPhi)))
@@ -872,6 +865,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
                     // Found solution! Exit CEGIS
                     result = Some(RuleClosed(sol))
                   case Left(cexs) =>
+                    hctx.reporter.debug(s"Found cexs! $cexs")
                     // Found some counterexamples
                     // (bear in mind that these will in fact exclude programs within validatePrograms()
                     val newCexs = cexs.map(InExample)
