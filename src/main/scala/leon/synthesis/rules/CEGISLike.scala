@@ -766,29 +766,28 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
          */
         val nTests = if (p.pc == BooleanLiteral(true)) 50 else 20
 
-        val inputGenerator: Iterator[Example] = if (useVanuatoo) {
-          new VanuatooDataGen(hctx, hctx.program).generateFor(p.as, p.pc, nTests, 3000).map(InExample)
-        } else {
-          val evaluator = new DualEvaluator(hctx, hctx.program, CodeGenParams.default)
-          new GrammarDataGen(evaluator, ValueGrammar).generateFor(p.as, p.pc, nTests, 1000).map(InExample)
+        val inputGenerator: Iterator[Example] = {
+          val complicated = exists{
+            case FunctionInvocation(tfd, _) if tfd.fd == hctx.functionContext => true
+            case Choose(_) => true
+            case _ => false
+          }(p.pc)
+          if (complicated) {
+            Iterator()
+          } else {
+            if (useVanuatoo) {
+              new VanuatooDataGen(hctx, hctx.program).generateFor(p.as, p.pc, nTests, 3000).map(InExample)
+            } else {
+              val evaluator = new DualEvaluator(hctx, hctx.program, CodeGenParams.default)
+              new GrammarDataGen(evaluator, ValueGrammar).generateFor(p.as, p.pc, nTests, 1000).map(InExample)
+            }
+          }
         }
-
-        // This is the starting test-base
-        val gi = new GrowableIterable[Example](baseExampleInputs, inputGenerator)
 
         // We keep number of failures per test to pull the better ones to the front
         val failedTestsStats = new MutableMap[Example, Int]().withDefaultValue(0)
 
-        def hasInputExamples = gi.nonEmpty
-
         var n = 1
-        def allInputExamples() = {
-          if (n == 10 || n == 50 || n % 500 == 0) {
-            gi.sortBufferBy(e => -failedTestsStats(e))
-          }
-          n += 1
-          gi.iterator
-        }
 
         try {
           do {
@@ -799,6 +798,22 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
             val nInitial = ndProgram.prunedPrograms.size
             hctx.reporter.debug("#Programs: "+nInitial)
+
+            def nPassing = ndProgram.prunedPrograms.size
+
+            def programsReduced() = nInitial / nPassing > testReductionRatio || nPassing <= 10
+            // This is the starting test-base
+            val gi = new GrowableIterable[Example](baseExampleInputs, inputGenerator, programsReduced)
+
+            def hasInputExamples = gi.nonEmpty
+
+            def allInputExamples() = {
+              if (n == 10 || n == 50 || n % 500 == 0) {
+                gi.sortBufferBy(e => -failedTestsStats(e))
+              }
+              n += 1
+              gi.iterator
+            }
 
             //sctx.reporter.ifDebug{ printer =>
             //  val limit = 100
@@ -830,8 +845,6 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
               timers.filter.stop()
             }
 
-            def nPassing = ndProgram.prunedPrograms.size
-
             hctx.reporter.debug(s"#Programs passing tests: $nPassing out of $nInitial")
             hctx.reporter.ifDebug{ printer =>
               for (p <- ndProgram.prunedPrograms.take(100)) {
@@ -857,7 +870,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
               hctx.reporter.debug("Programs left: " + ndProgram.prunedPrograms.size)
 
               // Phase 0: If the number of remaining programs is small, validate them individually
-              if (nInitial / nPassing > testReductionRatio || nPassing <= 10) {
+              if (programsReduced()) {
                 val programsToValidate = ndProgram.prunedPrograms
                 hctx.reporter.debug(s"Will send ${programsToValidate.size} program(s) to validate individually")
                 ndProgram.validatePrograms(programsToValidate) match {
