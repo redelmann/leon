@@ -731,7 +731,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
         // To the list of known examples, we add an additional one produced by the solver
         val solverExample = if (p.pc == BooleanLiteral(true)) {
-          InExample(p.as.map(a => simplestValue(a.getType)))
+          List(InExample(p.as.map(a => simplestValue(a.getType))))
         } else {
           val solverf = hctx.solverFactory
           val solver  = solverf.getNewSolver().setTimeout(exSolverTo)
@@ -742,7 +742,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
             solver.check match {
               case Some(true) =>
                 val model = solver.getModel
-                InExample(p.as.map(a => model.getOrElse(a, simplestValue(a.getType))))
+                List(InExample(p.as.map(a => model.getOrElse(a, simplestValue(a.getType)))))
 
               case Some(false) =>
                 hctx.reporter.debug("Path-condition seems UNSAT")
@@ -752,14 +752,15 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
                 if (!interruptManager.isInterrupted) {
                   hctx.reporter.warning("Solver could not solve path-condition")
                 }
-                return RuleFailed() // This is not necessary though, but probably wanted
+                Nil
+                //return RuleFailed() // This is not necessary though, but probably wanted
             }
           } finally {
             solverf.reclaim(solver)
           }
         }
 
-        val baseExampleInputs = p.eb.examples :+ solverExample
+        val baseExampleInputs = p.eb.examples ++ solverExample
 
         hctx.reporter.ifDebug { debug =>
           baseExampleInputs.foreach { in =>
