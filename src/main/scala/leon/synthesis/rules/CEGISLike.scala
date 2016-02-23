@@ -197,7 +197,6 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
       // Returns a count of all possible programs
       val allProgramsCount: () => Int = {
-
         var nAltsCache = Map[SizedNonTerm[T], Int]()
 
         def countAlternatives(l: SizedNonTerm[T]): Int = {
@@ -218,35 +217,33 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
        */
       def allPrograms(): Traversable[Set[Identifier]] = {
 
-        val allCount = allProgramsCount()
-        if (allCount > nProgramsLimit) {
-          hctx.reporter.debug(s"Exceeded program limit: $allCount > $nProgramsLimit")
+        var cache = Map[Identifier, Seq[Set[Identifier]]]()
+
+        val c = allProgramsCount()
+
+        if (c > nProgramsLimit) {
+          hctx.reporter.debug(s"Exceeded program limit: $c > $nProgramsLimit")
           return Seq()
         }
 
-        var cache = Map[Identifier, Seq[Set[Identifier]]]()
-
-        def allProgramsFor(cs: Seq[Identifier]): Seq[Set[Identifier]] = {
-          val seqs = for (c <- cs) yield {
-            if (!(cache contains c)) {
-              val subs = for ((b, _, subcs) <- cTree(c)) yield {
-                if (subcs.isEmpty) {
-                  Seq(Set(b))
-                } else {
-                  for (p <- allProgramsFor(subcs)) yield {
-                    p + b
-                  }
-                }
+        def allProgramsFor(c: Identifier): Seq[Set[Identifier]] = {
+          if (!(cache contains c)) {
+            val subs = for ((b, _, subcs) <- cTree(c)) yield {
+              if (subcs.isEmpty) {
+                Seq(Set(b))
+              } else {
+                val subPs = subcs map (s => allProgramsFor(s))
+                val combos = SeqUtils.cartesianProduct(subPs).map(_.flatten.toSet)
+                combos map (_ + b)
               }
-              cache += c -> subs.flatten
             }
-            cache(c)
+            cache += c -> subs.flatten
           }
-
-          SeqUtils.cartesianProduct(seqs).map(_.flatten.toSet)
+          cache(c)
         }
 
-        allProgramsFor(Seq(rootC))
+        allProgramsFor(rootC)
+
       }
 
       private def debugCTree(cTree: Map[Identifier, Seq[(Identifier, Seq[Expr] => Expr, Seq[Identifier])]],
@@ -573,10 +570,11 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
       // are minimal we make sure we exclude only Bs that are used.
       def excludeProgram(bs: Set[Identifier], isMinimal: Boolean): Unit = {
 
+
+
         def filterBTree(c: Identifier): Set[Identifier] = {
-          (for ((b, _, subcs) <- cTree(c) if bs(b)) yield {
-           Set(b) ++ subcs.flatMap(filterBTree)
-          }).toSet.flatten
+          val (b, _, subcs) = cTree(c).find(sub => bs(sub._1)).get
+          subcs.flatMap(filterBTree).toSet + b
         }
 
         val bvs = if (isMinimal) {
@@ -676,7 +674,6 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
         val solverf = SolverFactory.getFromSettings(hctx, programCTree).withTimeout(cexSolverTo)
         val solver  = solverf.getNewSolver()
         val cnstr = FunctionInvocation(phiFd.typed, phiFd.params.map(_.id.toVariable))
-
 
         try {
           solver.assertCnstr(andJoin(bsOrdered.map(b => if (bs(b)) b.toVariable else Not(b.toVariable))))
