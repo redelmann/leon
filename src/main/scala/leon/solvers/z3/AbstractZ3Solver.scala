@@ -13,7 +13,6 @@ import purescala.Constructors._
 import purescala.Extractors._
 import purescala.Expressions._
 import purescala.TypeOps._
-import xlang.Expressions._
 import purescala.ExprOps._
 import purescala.Types._
 
@@ -309,7 +308,6 @@ trait AbstractZ3Solver extends Solver {
             rb
           }
     
-          case Waypoint(_, e, _) => rec(e)
           case a @ Assert(cond, err, body) =>
             rec(IfExpr(cond, body, Error(a.getType, err.getOrElse("Assertion failed")).setPos(a.getPos)).setPos(a.getPos))
     
