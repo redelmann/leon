@@ -875,8 +875,9 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
                   case Left(cexs) =>
                     hctx.reporter.debug(s"Found cexs! $cexs")
                     // Found some counterexamples
-                    // (bear in mind that these will in fact exclude programs within validatePrograms()
+                    // (bear in mind that these will in fact exclude programs within validatePrograms())
                     val newCexs = cexs.map(InExample)
+                    newCexs foreach (failedTestsStats(_) += 1)
                     gi ++= newCexs
                 }
                 hctx.reporter.debug(s"#Programs after validating individually: ${ndProgram.prunedPrograms.size}")
