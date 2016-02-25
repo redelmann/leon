@@ -1631,8 +1631,6 @@ object ExprOps {
 
       }
 
-      import synthesis.Witnesses.Terminating
-
       val res = (t1, t2) match {
         case (Variable(i1), Variable(i2)) =>
           idHomo(i1, i2)
@@ -1658,11 +1656,6 @@ object ExprOps {
           cs1.size == cs2.size && isHomo(in1,in2) && isHomo(out1,out2) && casesMatch(cs1,cs2)
 
         case (FunctionInvocation(tfd1, args1), FunctionInvocation(tfd2, args2)) =>
-          // TODO: Check type params
-          fdHomo(tfd1.fd, tfd2.fd) &&
-          (args1 zip args2).forall{ case (a1, a2) => isHomo(a1, a2) }
-
-        case (Terminating(tfd1, args1), Terminating(tfd2, args2)) =>
           // TODO: Check type params
           fdHomo(tfd1.fd, tfd2.fd) &&
           (args1 zip args2).forall{ case (a1, a2) => isHomo(a1, a2) }
@@ -2122,7 +2115,6 @@ object ExprOps {
   def liftClosures(e: Expr): (Set[FunDef], Expr) = {
     var fds: Map[FunDef, FunDef] = Map()
 
-    import synthesis.Witnesses.Terminating
     val res1 = preMap({
       case LetDef(lfds, b) =>
         val nfds = lfds.map(fd => fd -> fd.duplicate())
@@ -2134,13 +2126,6 @@ object ExprOps {
       case FunctionInvocation(tfd, args) =>
         if (fds contains tfd.fd) {
           Some(FunctionInvocation(fds(tfd.fd).typed(tfd.tps), args))
-        } else {
-          None
-        }
-
-      case Terminating(tfd, args) =>
-        if (fds contains tfd.fd) {
-          Some(Terminating(fds(tfd.fd).typed(tfd.tps), args))
         } else {
           None
         }
