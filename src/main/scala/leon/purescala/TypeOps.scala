@@ -18,8 +18,7 @@ object TypeOps {
 
   def typeParamsOf(t: TypeTree): Set[TypeParameter] = t match {
     case tp: TypeParameter => Set(tp)
-    case _ =>
-      val NAryType(subs, _) = t
+    case NAryType(subs, _) =>
       subs.flatMap(typeParamsOf).toSet
   }
 
@@ -305,7 +304,7 @@ object TypeOps {
             Let(newId, srec(value), rec(idsMap + (id -> newId))(body)).copiedFrom(l)
 
           case l @ LetDef(fds, bd) =>
-            val fds_mapping = for(fd <- fds) yield {
+            val fdsMapping = for(fd <- fds) yield {
               val id = fd.id.freshen
               val tparams = fd.tparams map { p => 
                 TypeParameterDef(tpeSub(p.tp).asInstanceOf[TypeParameter])
@@ -322,13 +321,10 @@ object TypeOps {
               (fd, newFd, subCalls)
             }
             // We group the subcalls functions all in once
-            val subCalls = (((None:Option[Expr => Expr]) /: fds_mapping) {
-              case (None, (_, _, subCalls)) => Some(subCalls)
-              case (Some(fn), (_, _, subCalls)) => Some(fn andThen subCalls)
-            }).get
+            val subCalls = fdsMapping.map(_._3).reduceLeft { _ andThen _ }
             
             // We apply all the functions mappings at once
-            val newFds = for((fd, newFd, _) <- fds_mapping) yield {
+            val newFds = for((fd, newFd, _) <- fdsMapping) yield {
               val fullBody = rec(idsMap ++ fd.paramIds.zip(newFd.paramIds))(subCalls(fd.fullBody))
               newFd.fullBody = fullBody
               newFd
@@ -392,16 +388,7 @@ object TypeOps {
         }
       }
 
-      //println("\\\\"*80)
-      //println(tps)
-      //println(ids.map{ case (k,v) => k.uniqueName+" -> "+v.uniqueName })
-      //println("\\\\"*80)
-      //println(e)
-      val res = rec(ids)(e)
-      //println(".."*80)
-      //println(res)
-      //println("//"*80)
-      res
+      rec(ids)(e)
     }
   }
 }
