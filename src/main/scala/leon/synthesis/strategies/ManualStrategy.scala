@@ -8,9 +8,6 @@ import graph._
 
 import purescala.Common.FreshIdentifier
 
-import scala.annotation.tailrec
-
-
 class ManualStrategy(ctx: LeonContext, initCmd: Option[String], strat: Strategy) extends Strategy {
   implicit val ctx_ = ctx
 
@@ -162,7 +159,7 @@ class ManualStrategy(ctx: LeonContext, initCmd: Option[String], strat: Strategy)
                       |$tOpen  (cd) N  $tClose  Expand descendant N
                       |$tOpen  cd ..   $tClose  Go one level up
                       |$tOpen  b       $tClose  Expand best descendant
-                      |$tOpen  t       $tClose  Display the current partial solution, with the current position as a hole
+                      |$tOpen  t       $tClose  Display the partial solution around the current node
                       |$tOpen  q       $tClose  Quit the search
                       |$tOpen  h       $tClose  Display this message
                       |""".stripMargin)
@@ -212,7 +209,7 @@ class ManualStrategy(ctx: LeonContext, initCmd: Option[String], strat: Strategy)
             case Some(_) =>
               path = path :+ next
             case None =>
-              warning("Unknown descendent: "+next)
+              warning("Unknown descendant: "+next)
           }
 
           if (rest.nonEmpty) {
@@ -232,7 +229,7 @@ class ManualStrategy(ctx: LeonContext, initCmd: Option[String], strat: Strategy)
   var cmdQueue = initCmd.map( str => parseCommands(parseString(str))).getOrElse(Nil)
 
   private def parseString(s: String): List[String] = {
-    s.trim.split("\\s+|,").toList
+    Option(s).map(_.trim.split("\\s+|,").toList).getOrElse(fatalError("End of stream"))
   }
 
   private def nextCommand(): Command = cmdQueue match {
