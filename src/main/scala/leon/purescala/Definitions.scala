@@ -191,6 +191,13 @@ object Definitions {
 
   }
 
+  /** A trait that represents flags that annotate a ClassDef with different attributes */
+  sealed trait ClassFlag
+
+  object ClassFlag {
+    def fromName(name: String, args: Seq[Option[Any]]): ClassFlag = Annotation(name, args)
+  }
+
   /** A trait that represents flags that annotate a FunDef with different attributes */
   sealed trait FunctionFlag
 
@@ -199,13 +206,6 @@ object Definitions {
       case "inline" => IsInlined
       case _ => Annotation(name, args)
     }
-  }
-
-  /** A trait that represents flags that annotate a ClassDef with different attributes */
-  sealed trait ClassFlag
-
-  object ClassFlag {
-    def fromName(name: String, args: Seq[Option[Any]]): ClassFlag = Annotation(name, args)
   }
 
   // Whether this FunDef was originally a (lazy) field
@@ -223,7 +223,7 @@ object Definitions {
   case object IsSynthetic extends FunctionFlag
   // Is inlined
   case object IsInlined extends FunctionFlag
-
+  case object IsInner extends FunctionFlag
 
   /** Represents a class definition (either an abstract- or a case-class) */
   sealed trait ClassDef extends Definition {
@@ -447,6 +447,7 @@ object Definitions {
     def canBeField        = canBeLazyField || canBeStrictField
     def isRealFunction    = !canBeField
     def isSynthetic       = flags contains IsSynthetic
+    def isInner           = flags contains IsInner
     def methodOwner       = flags collectFirst { case IsMethod(cd) => cd }
 
     /* Wrapping in TypedFunDef */
