@@ -396,7 +396,8 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
       }
 
       // Tests a candidate solution against an example in the correct environment
-      def testForProgram(bValues: Set[Identifier])(ex: Example): Boolean = {
+      // None -> evaluator error
+      def testForProgram(bValues: Set[Identifier])(ex: Example): Option[Boolean] = {
 
         def redundant(e: Expr): Boolean = {
           val (op1, op2) = e match {
@@ -441,7 +442,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
         // Deactivated for now, since it doesnot seem to help
         if (redundancyCheck && params.optimizations && exists(redundant)(outerSol)) {
           excludeProgram(bs, true)
-          return false
+          return Some(false)
         }
         val innerSol = outerExprToInnerExpr(outerSol)
         val cnstr = letTuple(p.xs, innerSol, innerPhi)
@@ -462,7 +463,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
         res match {
           case EvaluationResults.Successful(res) =>
-            res == BooleanLiteral(true)
+            Some(res == BooleanLiteral(true))
 
           case EvaluationResults.RuntimeError(err) =>
             /*if (err.contains("Empty production rule")) {
@@ -475,11 +476,11 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
               println()
             }*/
             hctx.reporter.debug("RE testing CE: "+err)
-            false
+            Some(false)
 
           case EvaluationResults.EvaluatorError(err) =>
             hctx.reporter.debug("Error testing CE: "+err)
-            false
+            None
         }
 
       }
@@ -802,7 +803,8 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
             def nPassing = ndProgram.prunedPrograms.size
 
-            def programsReduced() = nInitial / nPassing > testReductionRatio || nPassing <= 10
+            def programsReduced() = nPassing <= 10 || nInitial / nPassing > testReductionRatio 
+
             // This is the starting test-base
             val gi = new GrowableIterable[Example](baseExampleInputs, inputGenerator, programsReduced)
 
@@ -827,20 +829,38 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
             //    printer(" - ...")
             //  }
             //}
+    
+            hctx.reporter.debug("#Tests: "+baseExampleInputs.size)
+            hctx.reporter.ifDebug{ printer =>
+              for (e <- baseExampleInputs.take(10)) {
+                printer(" - "+e.asString)
+              }
+              if(baseExampleInputs.size > 10) {
+                printer(" - ...")
+              }
+            }
 
             // We further filter the set of working programs to remove those that fail on known examples
             if (hasInputExamples) {
               timers.filter.start()
               for (bs <- ndProgram.prunedPrograms if !interruptManager.isInterrupted) {
                 val examples = allInputExamples()
-                examples.find(e => !ndProgram.testForProgram(bs)(e)).foreach { e =>
-                  failedTestsStats(e) += 1
-                  hctx.reporter.debug(f" Program: ${ndProgram.getExpr(bs).asString}%-80s failed on: ${e.asString}")
-                  ndProgram.excludeProgram(bs, true)
-                }
+                var stop = false
+                for (e <- examples if !stop) {
+                  ndProgram.testForProgram(bs)(e) match {
+                    case Some(true) => // ok, passes
+                    case Some(false) =>
+                      // Program fails the test
+                      stop = true
+                      failedTestsStats(e) += 1
+                      hctx.reporter.debug(f" Program: ${ndProgram.getExpr(bs).asString}%-80s failed on: ${e.asString}")
+                      ndProgram.excludeProgram(bs, true)
+                    case None =>
+                      // Eval. error -> bad example
+                      hctx.reporter.debug(s" Test $e failed, removing...")
+                      gi -= e
+                  }
 
-                if (ndProgram.excludedPrograms.size+1 % 1000 == 0) {
-                  hctx.reporter.debug("..."+ndProgram.excludedPrograms.size)
                 }
               }
               timers.filter.stop()
@@ -855,17 +875,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
                 printer(" - ...")
               }
             }
-            hctx.reporter.debug("#Tests: "+baseExampleInputs.size)
-            hctx.reporter.ifDebug{ printer =>
-              for (e <- baseExampleInputs.take(10)) {
-                printer(" - "+e.asString)
-              }
-              if(baseExampleInputs.size > 10) {
-                printer(" - ...")
-              }
-            }
-
-            // CEGIS Loop at a given unfolding level
+              // CEGIS Loop at a given unfolding level
             while (result.isEmpty && !interruptManager.isInterrupted && !ndProgram.allProgramsClosed) {
               timers.loop.start()
               hctx.reporter.debug("Programs left: " + ndProgram.prunedPrograms.size)
@@ -891,6 +901,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
               if (result.isEmpty && !ndProgram.allProgramsClosed) {
                 // Phase 1: Find a candidate program that works for at least 1 input
+                hctx.reporter.debug("Looking for program that works on at least 1 input...")
                 ndProgram.solveForTentativeProgram() match {
                   case Some(Some(bs)) =>
                     hctx.reporter.debug(s"Found tentative model ${ndProgram.getExpr(bs)}, need to validate!")
@@ -906,9 +917,15 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
                         // Retest whether the newly found C-E invalidates some programs
                         ndProgram.prunedPrograms.foreach { p =>
-                          if (!ndProgram.testForProgram(p)(ce)) {
-                            failedTestsStats(ce) += 1
-                            ndProgram.excludeProgram(p, true)
+                          ndProgram.testForProgram(p)(ce) match {
+                            case Some(true) =>
+                            case Some(false) =>
+                              hctx.reporter.debug(f" Program: ${ndProgram.getExpr(p).asString}%-80s failed on: ${ce.asString}")
+                              failedTestsStats(ce) += 1
+                              ndProgram.excludeProgram(p, true)
+                            case None =>
+                              hctx.reporter.debug(s" Test $ce failed, removing...")
+                              gi -= ce
                           }
                         }
 

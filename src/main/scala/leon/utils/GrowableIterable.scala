@@ -17,6 +17,7 @@ class GrowableIterable[T](init: Seq[T], growth: Iterator[T], canGrow: () => Bool
 
   def +=(more: T) = buffer += more
   def ++=(more: Seq[T]) = buffer ++= more
+  def -=(less: T) = buffer -= less
 
   def iterator: Iterator[T] = {
     buffer.iterator ++ cachingIterator
