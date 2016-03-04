@@ -548,6 +548,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
                 case Some(false) =>
                   // UNSAT, valid program
+                  hctx.reporter.debug("Found valid program!")
                   return Right(Solution(BooleanLiteral(true), Set(), outerSol, true))
 
                 case None =>
