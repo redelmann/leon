@@ -38,7 +38,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
   def instantiateOn(implicit hctx: SearchContext, p: Problem): Traversable[RuleInstantiation] = {
 
     val exSolverTo  = 2000L
-    val cexSolverTo = 5000L
+    val cexSolverTo = 2000L
 
     // Track non-deterministic programs up to 100'000 programs, or give up
     val nProgramsLimit = 100000
@@ -509,6 +509,8 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
         var cexs = Seq[Seq[Expr]]()
 
+        var best: Option[Solution] = None
+
         for (bs <- bss.toSeq) {
           // We compute the corresponding expr and replace it in place of the C-tree
           val outerSol = getExpr(bs)
@@ -522,7 +524,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
           val eval = new DefaultEvaluator(hctx, innerProgram)
 
           if (cexs exists (cex => eval.eval(cnstr, p.as.zip(cex).toMap).result == Some(BooleanLiteral(true)))) {
-            //println(s"Program $outerSol fails!")
+            hctx.reporter.debug(s"Rejected by CEX: $outerSol")
             excludeProgram(bs, true)
             cTreeFd.fullBody = origImpl
           } else {
@@ -531,9 +533,11 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
             val solverf = SolverFactory.getFromSettings(hctx, innerProgram).withTimeout(cexSolverTo)
             val solver = solverf.getNewSolver()
             try {
+              hctx.reporter.debug("Sending candidate to solver...")
               solver.assertCnstr(cnstr)
               solver.check match {
                 case Some(true) =>
+                  hctx.reporter.debug(s"Proven invalid: $outerSol")
                   excludeProgram(bs, true)
                   val model = solver.getModel
                   //println("Found counter example: ")
@@ -553,10 +557,9 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
 
                 case None =>
                   if (useOptTimeout) {
-                    // Interpret timeout in CE search as "the candidate is valid"
-                    hctx.reporter.info("CEGIS could not prove the validity of the resulting expression")
                     // Optimistic valid solution
-                    return Right(Solution(BooleanLiteral(true), Set(), outerSol, false))
+                    hctx.reporter.debug("Found a non-verifiable solution...")
+                    best = Some(Solution(BooleanLiteral(true), Set(), outerSol, false))
                   }
               }
             } finally {
@@ -567,7 +570,11 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
           }
         }
 
-        Left(cexs)
+        best.map{ sol =>
+          // Interpret timeout in CE search as "the candidate is valid"
+          hctx.reporter.info("CEGIS could not prove the validity of the resulting expression")
+          Right(sol)
+        }.getOrElse(Left(cexs))
       }
 
       def allProgramsClosed = prunedPrograms.isEmpty
