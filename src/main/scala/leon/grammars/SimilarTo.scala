@@ -24,8 +24,7 @@ case class SimilarTo(e: Expr, terminals: Set[Expr] = Set(), sctx: SynthesisConte
       BaseGrammar ||
       EqualityGrammar(Set(IntegerType, Int32Type, BooleanType) ++ terminals.map { _.getType }) ||
       OneOf(terminals.toSeq :+ e) ||
-      FunctionCalls(sctx.program, sctx.functionContext, p.as.map(_.getType), excludeFCalls) ||
-      SafeRecursiveCalls(sctx.program, p.ws, p.pc),
+      FunctionCalls(sctx.program, sctx.functionContext, p.as.map(_.getType), excludeFCalls),
     { (t: TypeTree)      => NonTerminal(t, "B", None)},
     { (l: NonTerminal[String]) => l.getType }
   ), 1)
