@@ -34,7 +34,7 @@ object Main {
 
   // Add whatever you need here.
   lazy val allComponents : Set[LeonComponent] = allPhases.toSet ++ Set(
-    solvers.z3.FairZ3Component, MainComponent, SharedOptions, solvers.smtlib.SMTLIBCVC4Component, solvers.isabelle.Component
+    solvers.z3.FairZ3Component, MainComponent, GlobalOptions, solvers.smtlib.SMTLIBCVC4Component, solvers.isabelle.Component
   )
 
   /*
@@ -72,14 +72,14 @@ object Main {
     reporter.info("")
 
     reporter.title("Additional global options")
-    for (opt <- SharedOptions.definedOptions.toSeq.sortBy(_.name)) {
+    for (opt <- GlobalOptions.definedOptions.toSeq.sortBy(_.name)) {
       reporter.info(opt.helpString)
     }
     reporter.info("")
 
     reporter.title("Additional options, by component:")
 
-    for (c <- (allComponents - MainComponent - SharedOptions).toSeq.sortBy(_.name) if c.definedOptions.nonEmpty) {
+    for (c <- (allComponents - MainComponent - GlobalOptions).toSeq.sortBy(_.name) if c.definedOptions.nonEmpty) {
       reporter.info("")
       reporter.info(s"${c.name} (${c.description})")
       for(opt <- c.definedOptions.toSeq.sortBy(_.name)) {
@@ -126,7 +126,7 @@ object Main {
 
     val reporter = new DefaultReporter(
       leonOptions.collectFirst {
-        case LeonOption(SharedOptions.optDebug, sections) => sections.asInstanceOf[Set[DebugSection]]
+        case LeonOption(GlobalOptions.optDebug, sections) => sections.asInstanceOf[Set[DebugSection]]
       }.getOrElse(Set[DebugSection]())
     )
 
@@ -165,7 +165,7 @@ object Main {
     val helpF        = ctx.findOptionOrDefault(optHelp)
     val noopF        = ctx.findOptionOrDefault(optNoop)
     val synthesisF   = ctx.findOptionOrDefault(optSynthesis)
-    val xlangF       = ctx.findOptionOrDefault(SharedOptions.optXLang)
+    val xlangF       = ctx.findOptionOrDefault(GlobalOptions.optXLang)
     val repairF      = ctx.findOptionOrDefault(optRepair)
     val isabelleF    = ctx.findOptionOrDefault(optIsabelle)
     val terminationF = ctx.findOptionOrDefault(optTermination)
@@ -238,7 +238,7 @@ object Main {
 
     ctx.interruptManager.registerSignalHandler()
 
-    val doWatch = ctx.findOptionOrDefault(SharedOptions.optWatch)
+    val doWatch = ctx.findOptionOrDefault(GlobalOptions.optWatch)
 
     if (doWatch) {
       val watcher = new FilesWatcher(ctx, ctx.files ++ Build.libFiles.map{ new java.io.File(_)})

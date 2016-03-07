@@ -36,8 +36,8 @@ class InferenceContext(val initProgram: Program, val leonContext: LeonContext) {
 
   // the following options have default values
   val vcTimeout = leonContext.findOption(optVCTimeout).getOrElse(15L) // in secs
-  val totalTimeout = leonContext.findOption(SharedOptions.optTimeout) // in secs
-  val functionsToInfer = leonContext.findOption(SharedOptions.optFunctions)
+  val totalTimeout = leonContext.findOption(GlobalOptions.optTimeout) // in secs
+  val functionsToInfer = leonContext.findOption(GlobalOptions.optFunctions)
   val reporter = leonContext.reporter
   val maxCegisBound = 1000
   val statsSuffix = leonContext.findOption(optStatsSuffix).getOrElse("-stats" + FileCountGUID.getID)

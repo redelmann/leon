@@ -59,7 +59,7 @@ object LeonContext {
     new LeonContext(
       reporter,
       new InterruptManager(reporter),
-      options = Seq(LeonOption[Set[DebugSection]](SharedOptions.optDebug)(Set(DebugSectionTrees)))
+      options = Seq(LeonOption[Set[DebugSection]](GlobalOptions.optDebug)(Set(DebugSectionTrees)))
     )
   }
 }
