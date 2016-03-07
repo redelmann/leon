@@ -13,7 +13,7 @@ import purescala.ExprOps._
 import purescala.Types._
 import utils._
 
-import z3.FairZ3Component.{optFeelingLucky, optUseCodeGen, optAssumePre, optNoChecks, optUnfoldFactor}
+import z3.FairZ3Component._
 import templates._
 import evaluators._
 import Template._
@@ -110,13 +110,11 @@ class UnrollingSolver(val context: LeonContext, val program: Program, underlying
   def hasFoundAnswer = lastCheckResult._1
 
   private def extractModel(model: Model): HenkinModel = {
-    val allVars = freeVars.toSet
 
     def extract(b: Expr, m: Matcher[Expr]): Set[Seq[Expr]] = {
-      val QuantificationTypeMatcher(fromTypes, _) = m.tpe
       val optEnabler = evaluator.eval(b, model).result
 
-      if (optEnabler == Some(BooleanLiteral(true))) {
+      if (optEnabler.contains(BooleanLiteral(true))) {
         val optArgs = m.args.map(arg => evaluator.eval(arg.encoded, model).result)
         if (optArgs.forall(_.isDefined)) {
           Set(optArgs.map(_.get))
@@ -131,15 +129,15 @@ class UnrollingSolver(val context: LeonContext, val program: Program, underlying
     val (typeInsts, partialInsts, lambdaInsts) = templateGenerator.manager.instantiations
 
     val typeDomains: Map[TypeTree, Set[Seq[Expr]]] = typeInsts.map {
-      case (tpe, domain) => tpe -> domain.flatMap { case (b, m) => extract(b, m) }.toSet
+      case (tpe, domain) => tpe -> domain.flatMap { case (b, m) => extract(b, m) }
     }
 
     val funDomains: Map[Identifier, Set[Seq[Expr]]] = partialInsts.map {
-      case (Variable(id), domain) => id -> domain.flatMap { case (b, m) => extract(b, m) }.toSet
+      case (Variable(id), domain) => id -> domain.flatMap { case (b, m) => extract(b, m) }
     }
 
     val lambdaDomains: Map[Lambda, Set[Seq[Expr]]] = lambdaInsts.map {
-      case (l, domain) => l -> domain.flatMap { case (b, m) => extract(b, m) }.toSet
+      case (l, domain) => l -> domain.flatMap { case (b, m) => extract(b, m) }
     }
 
     val asDMap = purescala.Quantification.extractModel(model.toMap, funDomains, typeDomains, evaluator)

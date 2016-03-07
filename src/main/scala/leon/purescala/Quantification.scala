@@ -4,9 +4,7 @@ package leon
 package purescala
 
 import Common._
-import Definitions._
 import Expressions._
-import Constructors._
 import Extractors._
 import ExprOps._
 import Types._
