@@ -853,6 +853,7 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
               timers.filter.start()
               for (bs <- ndProgram.prunedPrograms if !interruptManager.isInterrupted) {
                 val examples = allInputExamples()
+                var badExamples = List[Example]()
                 var stop = false
                 for (e <- examples if !stop) {
                   ndProgram.testForProgram(bs)(e) match {
@@ -866,10 +867,10 @@ abstract class CEGISLike[T <: Typed](name: String) extends Rule(name) {
                     case None =>
                       // Eval. error -> bad example
                       hctx.reporter.debug(s" Test $e failed, removing...")
-                      gi -= e
+                      badExamples ::= e
                   }
-
                 }
+                gi --= badExamples
               }
               timers.filter.stop()
             }
